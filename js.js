@@ -127,6 +127,7 @@ window.onclick = e => {
 
 //////////////////// Main render loop
 var then, dt, fps;
+let models_initialized = false;
 then = Date.now();
 const render = () => {
     renderer.render(scene, camera);
@@ -264,6 +265,7 @@ function open_sidebar() {
         sidebar.style.backdropFilter = "blur(20px)";
         sidebar.onmouseleave = () => {
             open_sidebar();
+            sidebar.onmouseleave = null;
         }
 
     }
