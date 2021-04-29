@@ -1,5 +1,7 @@
 var THREE = require('three');
 var TWEEN = createjs.Tween;
+const globals = require('./GLOBALS.js');
+const model_importer = require('./model_imports.js')
 /* var GLTFLoader = require('./node_modules/three/examples/js/loaders/GLTFLoader') */
 var GLTFLoader = require('three-gltf-loader');
 /* const imp = require('./import.js') */
@@ -8,11 +10,16 @@ var GLTFLoader = require('three-gltf-loader');
 const steps = []
 
 console.log("loaded")
-let scene, camera, renderer;
+let camera, renderer;
 let lobster;
+
+let canvas;
 
 
 let text1, text2;
+
+
+let sidebar;
 
 
 
@@ -21,14 +28,20 @@ const loader = new GLTFLoader()
 window.onload = () => {
     let mobile = isMobile();
 
-    
+
+    sidebar = document.getElementById('sidebar');
+    sidebar.addEventListener('onclick', () => {
+        console.log("ASFGsr")
+        open_sidebar();
+    })
+
 
     createjs.Ticker.framerate = 60;
 
     text1 = document.getElementById('text1')
-    text1.style.opacity= 0;
+    text1.style.opacity = 0;
     text2 = document.getElementById('text2')
-    text2.style.opacity= 0;
+    text2.style.opacity = 0;
     let bg = document.getElementById('bg');
 
     /* document.getElementById("bg").style.backgroundImage = "blue" */
@@ -59,6 +72,7 @@ window.onload = () => {
 
 
     /* console.log(scene) */
+    canvas = document.getElementsByTagName('canvas')[0]
 }
 
 window.addEventListener('resize', function () {
@@ -75,7 +89,7 @@ let scroll = 0;
 
 document.onwheel = e => {
     scroll += e.deltaY * .1;
-    console.log(scroll);
+    /* console.log(scroll); */
     let style = "linear-gradient(0deg,rgb(0,162,255) " + scroll * .1 + ("%, rgb(183, 0, 255) " + (scroll + 100) * .1 + "%);");
     /* style = "linear-gradient(0deg, rgb(0, 162, 255) 0%, rgb(183, 0, 255) 100%)" */
     /* style = "blue" */
@@ -84,7 +98,7 @@ document.onwheel = e => {
     bg.style.display = "none"
     bg.style.display = "block"
     /* document.body.style.background = style */
-    console.log(style)
+    /* console.log(style) */
     /* console.log(bg.style.backgroundImage); */
     /* var blue = "blue" */
     /*  bg.style.backgroundImage = "blue" */
@@ -99,7 +113,15 @@ window.onclick = e => {
             }, 500,createjs.Ease.quadIn).to({x:0}, 500, createjs.Ease.quadIn);
             console.log(e) */
 
-    stepPlayer.nextStep()
+    switch (e.target) {
+        case canvas:
+            stepPlayer.nextStep()
+            break;
+        case sidebar:
+            open_sidebar();
+            break;
+    }
+
 }
 
 
@@ -203,7 +225,6 @@ const import_lobster = () => {
     }, error => {
         console.log(error)
     })
-
 }
 
 
@@ -223,6 +244,30 @@ class MeshMaterialParser {
             if (child.children) this.parse(child);
         }
     }
+}
+
+
+
+let sidebar_open = false;
+
+function open_sidebar() {
+
+    if (sidebar_open) {
+        //TURN OFF
+        sidebar.style.width = "5%";
+        sidebar.style.backgroundColor = "rgba(0,0,0,0)";
+        sidebar.style.backdropFilter = "blur(0px)";
+    } else {
+        //TURN ON
+        sidebar.style.width = "60%";
+        sidebar.style.backgroundColor = "rgba(0,0,0,.2)";
+        sidebar.style.backdropFilter = "blur(20px)";
+        sidebar.onmouseleave = () => {
+            open_sidebar();
+        }
+
+    }
+    sidebar_open = !sidebar_open
 }
 
 function isMobile() {

@@ -1,67 +1,99 @@
 body,
 html {
-    overflow: hidden;
-    margin: 0;
-    padding: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
 
-    font-family: DM-Serif;
-    font-weight: 600;
-    font-size: 8vh;
-    line-height: 120%;
+  font-family: DM-Serif;
+  font-weight: 600;
+  font-size: 8vh;
+  line-height: 120%;
 }
 #bg {
-    /* ne pas changer la position de cet élément (second dans la liste) */
-    position: fixed;
-    width: 100%;
-    height: 100%;
-    z-index: -100;
-    background: linear-gradient(0deg, rgb(0, 102, 255) 0%, rgb(98, 0, 255) 100%);
+  /* ne pas changer la position de cet élément (second dans la liste) */
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  z-index: -100;
+  background: linear-gradient(
+    0deg,
+    rgb(29, 59, 83) 0%,
+    rgb(30, 25, 78) 50%,
+    rgb(34, 11, 54) 75%,
+    rgb(15, 14, 14) 100%
+  );
 }
 
 canvas {
-    position: absolute;
-    top: 0px;
-    right: 0px;
+  position: absolute;
+  top: 0px;
+  right: 0px;
 
-    z-index: -1;
+  z-index: -1;
 }
 
 .textContainer {
-    position: fixed;
-    margin: 5% 25% 5% 5%;
-    user-select: none;
-    opacity:0
+  color: white;
+  position: fixed;
+  margin: 5% 25% 5% 5%;
+  user-select: none;
+  opacity: 0;
+  mix-blend-mode: lighten;
+}
+.open {
+  width: 300px;
+}
+#circle {
+  border-radius: 2000px;
+  background-color: black;
+  width: 20px;
+  height: 20px;
 }
 
-.textContainer:after {
-    mix-blend-mode: difference;
+#sidebar {
+  width: 5%;
+  height: 100%;
+  right: 0px;
+  /* top: -1px; */
+  position: fixed;
+  box-shadow: inset 0 0 0 2px black;
+  transition: 0.15s;
+  opacity: 0.5;
+}
+#sidebar:hover {
+  width: 6%;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 3px rgb(30, 30, 30);
+}
+/* .textContainer:after {
+  mix-blend-mode: difference;
+} */
+
+@font-face {
+  font-family: DM-Serif;
+  src: url(./assets/DMSerifText-Regular.ttf);
+  font-style: normal;
 }
 
 @font-face {
-    font-family: DM-Serif;
-    src: url(./assets/DMSerifText-Regular.ttf);
-    font-style: normal;
+  font-family: ZenDots;
+  src: url(./assets/ZenDots-Regular.ttf);
+  font-style: normal;
 }
 
 @font-face {
-    font-family: ZenDots;
-    src: url(./assets/ZenDots-Regular.ttf);
-    font-style: normal;
+  font-family: CarterOne;
+  src: url(./assets/CarterOne-Regular.ttf);
+  font-style: normal;
 }
 
 @font-face {
-    font-family: CarterOne;
-    src: url(./assets/CarterOne-Regular.ttf);
-    font-style: normal;
-}
-
-@font-face {
-    font-family: Allan;
-    src: url(./assets/Allan-Regular.ttf);
-    font-style: normal;
+  font-family: Allan;
+  src: url(./assets/Allan-Regular.ttf);
+  font-style: normal;
 }
 @font-face {
-    font-family: Abril;
-    src: url(./assets/AbrilFatface-Regular.ttf);
-    font-style: normal;
+  font-family: Abril;
+  src: url(./assets/AbrilFatface-Regular.ttf);
+  font-style: normal;
 }
