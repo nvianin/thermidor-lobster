@@ -1,6 +1,14 @@
 module.exports = () => {
-    let scene;
+    let scene, debugCube;
+
+    let model_importer, THREE
     return {
-        scene
+        THREE,
+        scene,
+        debugCube,
+        model_importer,
+        EffectComposer,
+        SAOPass,
+        composer
     }
 }

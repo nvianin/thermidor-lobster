@@ -1,24 +1,41 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 module.exports = () => {
-    let scene;
+    let scene, debugCube;
+
+    let model_importer, THREE
     return {
-        scene
+        THREE,
+        scene,
+        debugCube,
+        model_importer,
+        EffectComposer,
+        SAOPass,
+        composer
     }
 }
 },{}],2:[function(require,module,exports){
-var THREE = require('three');
+THREE = require('three');
 var TWEEN = createjs.Tween;
 const globals = require('./GLOBALS.js');
-const model_importer = require('./model_imports.js')
+models = require('./model_imports.js')
+
+/* EffectComposer = require('./node_modules/three/examples/js/postprocessing/EffectComposer')
+let RenderPass = require('./node_modules/three/examples/js/postprocessing/RenderPass')
+let SSAOPass = require('./node_modules/three/examples/js/postprocessing/SSAOPass') */
+
+
+stepPlayer.models = models;
+
 /* var GLTFLoader = require('./node_modules/three/examples/js/loaders/GLTFLoader') */
 var GLTFLoader = require('three-gltf-loader');
 /* const imp = require('./import.js') */
-
 
 const steps = []
 
 console.log("loaded")
 let camera, renderer;
+let renderpass, effectpass, fxaapass;
+
 let lobster;
 
 let canvas;
@@ -26,8 +43,10 @@ let canvas;
 
 let text1, text2;
 
-
+let dyk;
 let sidebar;
+
+let mouseReleased = false;
 
 
 
@@ -36,12 +55,37 @@ const loader = new GLTFLoader()
 window.onload = () => {
     let mobile = isMobile();
 
+    dyk = document.getElementById('dyk_container');
 
     sidebar = document.getElementById('sidebar');
-    sidebar.addEventListener('onclick', () => {
-        console.log("ASFGsr")
-        open_sidebar();
-    })
+    let i = 0;
+    for (var step of stepPlayer.steps) {
+        if (step.isImportant) {
+            console.log(step)
+            /* if (i > 0) sidebar.innerHTML += "<br>" */
+            let le = document.createElement('li');
+            le.classList.add("sidebar_element");
+
+            let id = stepPlayer.steps.map(e => {
+                return e.text
+            }).indexOf(step.text);
+            le.id = id
+            le.onclick = () => {
+                stepPlayer.changeStep(le.id);
+                console.log("going to step " + le.id)
+            }
+
+            if (step.shortText) {
+                le.innerHTML += step.shortText
+            } else {
+                le.innerHTML += step.text
+            }
+            sidebar.appendChild(le);
+
+            i++;
+        }
+    }
+
 
 
     createjs.Ticker.framerate = 60;
@@ -56,10 +100,38 @@ window.onload = () => {
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({
-        alpha: true
+        alpha: true,
+        antialias: true
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+
+
+    composer = new THREE.EffectComposer(renderer);
+    renderpass = new THREE.RenderPass(scene, camera);
+    SAOPass = new THREE.SAOPass(scene, camera, false, true);
+
+    composer.addPass(renderpass);
+    SAOPass.setSize(window.innerWidth, window.innerHeight);
+
+    SAOPass.params.saoBlurRadius = 16;
+    SAOPass.params.saoIntensity = .01
+    SAOPass.params.saoKernelRadius = 50;
+    SAOPass.params.saoScale = 6;
+    /* console.log(SAOPass.params) */
+
+    composer.addPass(SAOPass)
+
+    fxaapass = new THREE.ShaderPass(THREE.FXAAShader)
+    let copyPass = new THREE.ShaderPass(THREE.CopyShader);
+
+    composer.addPass(copyPass);
+    const pixelRatio = renderer.getPixelRatio();
+
+    fxaapass.material.uniforms['resolution'].value.x = 1 / (window.innerWidth * pixelRatio)
+    fxaapass.material.uniforms['resolution'].value.y = 1 / (window.innerHeight * pixelRatio)
+
+    composer.addPass(fxaapass)
 
     import_lobster();
 
@@ -69,6 +141,16 @@ window.onload = () => {
     light.position.x = 2;
     light.position.y = 2;
     scene.add(light)
+
+    const ambient = new THREE.AmbientLight({
+        color: 0xeeffee,
+    }, .15)
+    scene.add(ambient)
+
+    debugCube = new THREE.Mesh(new THREE.BoxGeometry(.1, .1, .1), new THREE.MeshBasicMaterial({
+        color: "purple"
+    }))
+    /* scene.add(debugCube); */
 
     /* const ambient = new THREE.AmbientLight('#ffffff');
     scene.add(ambient) */
@@ -87,6 +169,7 @@ window.addEventListener('resize', function () {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
+    SAOPass.setSize(window.innerWidth, window.innerHeight);
     /* console.log(camera.position) */
 })
 
@@ -113,7 +196,19 @@ document.onwheel = e => {
     /* console.log(`${blue}`) */
 }
 
-window.onclick = e => {
+let raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+window.onpointerup = e => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = (e.clientY / window.innerHeight) * 2 - 1;
+    mouse.y *= -1;
+
+    mouseReleased = true;
+}
+
+window.onpointerdown = e => {
+
     /* const tw = TWEEN.get(lobster.position)
         .to({
             x: 1,
@@ -121,9 +216,18 @@ window.onclick = e => {
             }, 500,createjs.Ease.quadIn).to({x:0}, 500, createjs.Ease.quadIn);
             console.log(e) */
 
+
+    console.log(e.target)
     switch (e.target) {
         case canvas:
-            stepPlayer.nextStep()
+
+            /* debugCube.position.set(intersects[0].point.x, intersects[0].point.y, intersects[0].point.z); */
+            /* console.log(intersects[0].point) */
+
+            if (intersects.length == 0) {
+                stepPlayer.nextStep()
+            }
+
             break;
         case sidebar:
             open_sidebar();
@@ -132,20 +236,93 @@ window.onclick = e => {
 
 }
 
+let mouseX, mouseY;
+mouseX = mouseY = 0;
+
+window.onmousemove = e => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+}
+
 
 //////////////////// Main render loop
 var then, dt, fps;
+let frameCount = 0;
 let models_initialized = false;
 then = Date.now();
+
+let intersects = []
+
 const render = () => {
-    renderer.render(scene, camera);
+
+    mouse.x = (mouseX / window.innerWidth) * 2 - 1;
+    mouse.y = (mouseY / window.innerHeight) * 2 - 1;
+    mouse.y *= -1;
+
+    frameCount++;
+    /* renderer.render(scene, camera); */
+    composer.render()
     if (lobster) lobster.rotation.y += .001 * dt;
 
     stepPlayer.currentLoop()
 
+    raycaster.setFromCamera(mouse, camera);
+    /* let raycastable = getObjectsInChildren(scene.children); */
+    let raycastable = fuckingGetObjects(scene);
+
+    intersects = raycaster.intersectObjects(raycastable);
+
+    /* if (frameCount % 10 == 0) {
+        console.log(intersects)
+        console.log(raycastable)
+    } */
+
+    for (let i of intersects) {
+        let target = i.object;
+        if (i.object.type == "SkinnedMesh") {
+            if (i.object.parent.name == "Armature") {
+                /* console.log(i.object.parent.parent); */
+                target = i.object.parent.parent;
+            }
+        }
+        if (target.onclick) {
+            if (frameCount % 100 == 0) console.log(target.name)
+            document.body.style.cursor = "pointer";
+            if (mouseReleased) {
+                target.onclick();
+            }
+            activated = true;
+        } else if (target.onclick == null) {
+            /* console.log("reset cursor to default") */
+            document.body.style.cursor = "default"
+            if (frameCount % 100 == 0) {
+                console.log(target)
+                /* target.position.y = 100; */
+            }
+        }
+        break;
+    }
+    if (intersects.length == 0) {
+        /* console.log("reset cursor to default") */
+        document.body.style.cursor = "default"
+    }
+
+
+
+    /* if (models.models_loaded) {
+        for (var ass of model_importer.assets) {
+            if (ass.type == "Mesh") {
+                ass.rotation.y += .001 * dt;
+            }
+        }
+        console.log(cup_half)
+    } */
+
     requestAnimationFrame(render)
     dt = Date.now() - then;
     then = Date.now()
+
+    mouseReleased = false;
 }
 ////////////////////
 
@@ -165,8 +342,9 @@ const bodyTone = new THREE.DataTexture(
     /* Uint8Array.from([0, 0, 0, 32, 32, 32, 64, 64, 64, 128, 128, 128, 200, 200, 200, 210, 210, 210, 255, 255, 255]), 3, 1, THREE.RGBFormat */
     Uint8Array.from([75, 75, 75, 75, 75, 75, 75, 75, 75, 160, 160, 160, 160, 160, 160, 200, 200, 200, 200, 220, 200, 255, 255, 255]), 8, 1, THREE.RGBFormat
 );
+//color: '#ff1231',
 const lobsterMat = new THREE.MeshToonMaterial({
-    color: '#ff1231',
+    color: '#ff3f26',
     gradientMap: bodyTone
 })
 const eyeTone = new THREE.DataTexture(
@@ -214,6 +392,7 @@ console.log(lobsterMat)
 const import_lobster = () => {
     loader.load('./assets/lobster_export.glb', gltf => {
         lobster = gltf.scene;
+        lobster.name = "lobster"
         stepPlayer.lobster = lobster
         lobster.children[0].children[4].material = antennaeMat // antennae
         lobster.children[0].children[5] // body ?
@@ -226,6 +405,30 @@ const import_lobster = () => {
 
         lobster.position.y = 7;
         lobster.position.z = -1;
+
+        lobster.onclick = () => {
+            const tw = TWEEN.get(lobster.scale)
+                .to({
+                    x: 1.1,
+                    y: 1.1,
+                    z: 1.1
+                }, 333, createjs.Ease.backIn)
+                .call(() => {
+                    const tw2 = TWEEN.get(lobster.scale)
+                        .to({
+                            x: 1,
+                            y: 1,
+                            z: 1
+                        }, 333, createjs.Ease.backOut)
+                })
+
+            const tw2 = TWEEN.get(lobster.rotation)
+                .to({
+                    x: lobster.rotation.x + Math.PI * 2,
+                    y: lobster.rotation.y,
+                    z: lobster.rotation.z
+                }, 500, createjs.Ease.quadInOut)
+        }
 
         scene.add(lobster);
         stepPlayer.nextStep()
@@ -263,18 +466,25 @@ function open_sidebar() {
 
     if (sidebar_open) {
         //TURN OFF
-        sidebar.style.width = "5%";
+        sidebar.style.width = "28px";
         sidebar.style.backgroundColor = "rgba(0,0,0,0)";
         sidebar.style.backdropFilter = "blur(0px)";
+        sidebar.style.cursor = "pointer";
+        /* sidebar.style.left = "98%"; */
     } else {
         //TURN ON
         sidebar.style.width = "60%";
+        /* sidebar.style.left = "auto"; */
         sidebar.style.backgroundColor = "rgba(0,0,0,.2)";
         sidebar.style.backdropFilter = "blur(20px)";
         sidebar.onmouseleave = () => {
-            open_sidebar();
+            if (sidebar_open) {
+                open_sidebar();
+            }
             sidebar.onmouseleave = null;
+
         }
+        sidebar.style.cursor = "default";
 
     }
     sidebar_open = !sidebar_open
@@ -288,207 +498,497 @@ function isMobile() {
         return false;
     }
 }
-},{"./GLOBALS.js":1,"./model_imports.js":3,"three":6,"three-gltf-loader":5}],3:[function(require,module,exports){
-const GLTFLoader = require('three-gltf-loader');
-const THREE = require('THREE')
-const loader = new GLTFLoader();
-
-const assets = []
-
-let cup_half, cup_half_liquid, cup_full, cup_full_liquid;
-
-let onion, onion_shell, onion_pieces;
-let pan, saw
-let spoon, spoon_spice, spoon_flakes;
 
 
-let models_loaded = false;
-
-let loadCount = 0;
-let successCount = 0;
-
-loadCount++
-loader.load('./assets/cup.glb', gltf => {
-    {
-        const cup_liquid_mat = new THREE.MeshStandardMaterial({
-            opacity: .45,
-            transparent: true,
-            color: 'yellow'
-        })
-        const cup_mat = new THREE.MeshStandardMaterial({
-            opacity: .3,
-            transparent: true,
-            color: "white",
-            depthTest: false
-        })
-        /* console.log(gltf) */
-
-        cup_half = gltf.scene.children[0];
-        cup_half.material = cup_mat;
-        cup_full = gltf.scene.children[1];
-        cup_full.material = cup_mat;
-
-
-        cup_half_liquid = gltf.scene.children[2];
-        cup_half_liquid.material = cup_liquid_mat;
-        cup_full_liquid = gltf.scene.children[3];
-        cup_full_liquid.material = cup_liquid_mat;
-
-        /* scene.add(cup_half);
-        scene.add(cup_half_liquid);
-        scene.add(cup_full);
-        scene.add(cup_full_liquid); */
-        assets.push(cup_half);
-        assets.push(cup_half_liquid);
-        assets.push(cup_full);
-        assets.push(cup_full_liquid);
-
-        cup_half.position.set(-1, 0, 0);
-        cup_half_liquid.position.set(-1, 0, 0)
-        cup_full.position.set(-.75, 0, 0);
-        cup_half_liquid.position.set(-.75, 0, 0);
-
-        successCount++;
-    }
-})
-loadCount++
-loader.load('./assets/onion.glb', gltf => {
-    console.log(gltf)
-
-    const onion_mat = new THREE.MeshStandardMaterial({
-        color: 'yellow'
-    });
-    const onion_pieces_mat = new THREE.MeshStandardMaterial({
-        color: 'yellow'
-    })
-    const onion_shell_mat = new THREE.MeshStandardMaterial({
-        color: 'brown'
-    })
-
-    onion_pieces = gltf.scene.children[0];
-    onion = gltf.scene.children[1];
-    onion_shell = gltf.scene.children[2];
-
-    onion_pieces.material = onion_pieces_mat;
-    onion.material = onion_mat;
-    onion_shell.material = onion_shell_mat;
-
-    onion_pieces.position.set(0, 0, 0);
-    onion.position.set(0, 0, 0)
-    onion_shell.position.set(0, 0, 0)
-
-    /* scene.add(onion_pieces);
-    scene.add(onion);
-    scene.add(onion_shell) */
-    assets.push(onion_pieces);
-    assets.push(onion);
-    assets.push(onion_shell)
-    successCount++;
-})
-loadCount++
-loader.load('assets/pan.glb', gltf => {
-    pan = gltf.scene.children[0];
-
-    const cast_iron_mat = new THREE.MeshToonMaterial({
-        color: 'darkgrey'
-    });
-    const handle_mat = new THREE.MeshToonMaterial({
-        color: 'lightblue'
-    });
-
-    pan.children[0].material = cast_iron_mat;
-    pan.children[1].material = handle_mat;
-
-    pan.position.set(0, 0, 0);
-
-    /* console.log(pan) */
-
-    assets.push(pan);
-    successCount++;
-})
-loadCount++
-loader.load('assets/saw.glb', gltf => {
-    saw = gltf.scene.children[0];
-
-    const sawMat = new THREE.MeshStandardMaterial({
-        color: 'grey',
-        metalness: 1,
-        roughness: .6
-    })
-
-    saw.material = sawMat;
-
-    saw.position.set(0, 0, 0);
-
-    assets.push(saw);
-    successCount++;
-})
-loadCount++
-loader.load('assets/spoon.glb', gltf => {
-
-    console.log(gltf.scene)
-
-    const spoon_mat = new THREE.MeshToonMaterial({
-        color: 'lightgrey'
-    });
-    const spoon_spice_mat = new THREE.MeshToonMaterial({
-        color: 'green'
-    });
-    const spoon_flake_mat = new THREE.MeshToonMaterial({
-        color: 'green'
-    });
-
-    spoon = gltf.scene.children[1];
-    spoon_spice = gltf.scene.children[0];
-    spoon_flakes = gltf.scene.children[0].children;
-
-    for (var flake of spoon_flakes) {
-        flake.material = spoon_flake_mat;
-    }
-
-    models_loaded = true;
-
-    assets.push(spoon)
-    assets.push(spoon_spice)
-    assets.push(spoon_flakes)
-
-
-    successCount++;
-
-
-    let fucking_load = setInterval(() => {
-        console.log("trying to load")
-        if (scene && successCount == loadCount) {
-
-            for (var obj of assets) {
-                console.log(obj.type)
-                if (obj.type == "Mesh") {
-                    scene.add(obj)
-                }
+function getObjectsInChildren(children) {
+    let return_objects = []
+    /* if (frameCount % 100 == 0) console.log(children) */
+    if (children[0]) {
+        for (child of children) {
+            switch (child.type) {
+                case "Mesh":
+                    return_objects.push(child);
+                    break;
+                case "Scene":
+                    return_objects = return_objects.concat(child.children);
+                    break;
             }
-            clearInterval(fucking_load)
         }
-
-    }, 10)
-})
-
-//
-module.exports = {
-    cup_half,
-    cup_half_liquid,
-    cup_full,
-    cup_full_liquid,
-    onion,
-    onion_shell,
-    onion_pieces,
-    pan,
-    saw,
-    spoon,
-    spoon_spice,
-    spoon_flakes,
-    models_loaded,
-    assets
+    }
+    return return_objects;
 }
+
+function fuckingGetObjects(parent) {
+    let fuck = []
+    for (child of parent.children) {
+        fuck.push(child);
+        if (child.children) {
+            fuck = fuck.concat(fuckingGetObjects(child));
+        }
+    }
+    return fuck;
+}
+},{"./GLOBALS.js":1,"./model_imports.js":3,"three":6,"three-gltf-loader":5}],3:[function(require,module,exports){
+ const GLTFLoader = require('three-gltf-loader');
+ const THREE = require('THREE')
+ const loader = new GLTFLoader();
+ const texLoader = new THREE.TextureLoader();
+
+ let assets = []
+
+ const bodyTone = new THREE.DataTexture(
+     // 0,128,255
+     // 0, 51,102, 153,204,255
+     // 0, 
+     /* Uint8Array.from([0, 0, 0, 128, 128, 128, 255, 255, 255]), 3, 1, THREE.RGBFormat */
+     /* Uint8Array.from([0, 0, 0, 51, 51, 51, 102, 102, 102, 153, 153, 153, 204, 204, 204, 255, 255, 255]), 3, 1, THREE.RGBFormat */
+     /* Uint8Array.from([0, 0, 0, 63, 63, 63, 120, 120, 120, 180, 180, 180, 255, 255, 255]), 3, 1, THREE.RGBFormat */
+     /* Uint8Array.from([0, 0, 0, 32, 32, 32, 64, 64, 64, 128, 128, 128, 200, 200, 200, 210, 210, 210, 255, 255, 255]), 3, 1, THREE.RGBFormat */
+     Uint8Array.from([75, 75, 75, 75, 75, 75, 75, 75, 75, 160, 160, 160, 160, 160, 160, 200, 200, 200, 200, 220, 200, 255, 255, 255]), 8, 1, THREE.RGBFormat
+ );
+
+ const threeTone = new THREE.DataTexture(Uint8Array.from([33, 33, 33, 128, 128, 128, 255, 255, 255]), 3, 1, THREE.RGBFormat);
+
+ const lobsterMat = new THREE.MeshToonMaterial({
+     color: '#ff3f26',
+     gradientMap: bodyTone
+ })
+
+ const cookedLobsterMat = new THREE.MeshToonMaterial({
+     color: '#ff0408',
+     gradientMap: bodyTone
+ })
+
+ /* setInterval(() => {
+     console.log(onion);
+ }, 500) */
+
+ const onion_body_color = texLoader.load('assets/textures/onion_body_base_color.png')
+ onion_body_color.flipY = false
+ const onion_piece_base_color = texLoader.load('assets/textures/onion_piece_base_color.png')
+ onion_piece_base_color.flipY = false
+ const onion_shell_base_color = texLoader.load('assets/textures/onion_shell_base_color.png')
+ onion_shell_base_color.flipY = false
+ const onion_shell_bump = texLoader.load('assets/textures/onion_shell_bump.png')
+ onion_shell_bump.flipY = false
+ onion_shell_bump.minFilter = THREE.LinearMipMapLinearFilter;
+ onion_shell_bump.magFilter = THREE.LinearMipMapLinearFilter;
+ const pan_bump = texLoader.load('assets/textures/pan_bump.png')
+ pan_bump.flipY = false;
+ const pan_color = texLoader.load('assets/textures/pan_color.png')
+ pan_color.flipY = false;
+ const saw_base_color = texLoader.load('assets/textures/saw_base_color.png')
+ saw_base_color.flipY = false
+ const saw_roughness = texLoader.load('assets/textures/saw_roughness.png')
+ saw_roughness.flipY = false
+ const spoon_spice_base_color = texLoader.load('assets/textures/spoon_spice_base_color.png')
+ spoon_spice_base_color.flipY = false
+
+ const debugTexture = texLoader.load('assets/textures/debug.jpg');
+
+ let cup_half, cup_half_liquid, cup_full, cup_full_liquid;
+
+ let onion, onion_shell, onion_pieces;
+ let pan, pan_liquid, saw
+ let spoon, spoon_spice, spoon_flakes;
+
+ let yolk;
+
+ let lobster_cracked, lobster_meat;
+ let claw_cracked, claw_meat;
+
+ let models_loaded = false;
+
+ let loadCount = 0;
+ let successCount = 0;
+
+ let default_pos = new THREE.Vector3(0, -5, 0);
+
+ /* module.exports = () => {
+     if (loadCount == successCount && scene) {
+         return {
+             cup_half,
+             cup_half_liquid,
+             cup_full,
+             cup_full_liquid,
+             onion,
+             onion_shell,
+             onion_pieces,
+             pan,
+             saw,
+             spoon,
+             spoon_spice,
+             spoon_flakes,
+             models_loaded,
+             assets,
+         }
+     } else {
+         setTimeout(module.exports, 100);
+     }
+} */
+ let fucking_load;
+
+ module.exports = {
+     cup_half,
+     cup_half_liquid,
+     cup_full,
+     cup_full_liquid,
+     onion,
+     onion_shell,
+     onion_pieces,
+     pan,
+     pan_liquid,
+     saw,
+     spoon,
+     spoon_spice,
+     spoon_flakes,
+     /* lobster_cracked,
+     lobster_meat,
+     claw_cracked,
+     claw_meat, */
+     models_loaded,
+     assets,
+     fucking_load,
+     successCount,
+     loadCount
+ }
+
+ loadCount++
+ loader.load('./assets/cup.glb', gltf => {
+     {
+         const cup_liquid_mat = new THREE.MeshStandardMaterial({
+             opacity: .45,
+             transparent: true,
+             color: 'yellow'
+         })
+         const cup_mat = new THREE.MeshStandardMaterial({
+             opacity: .3,
+             transparent: true,
+             color: "white",
+             depthTest: false
+         })
+         /* console.log(gltf) */
+
+         cup_half = gltf.scene.children[0];
+         cup_half.material = cup_mat;
+         cup_full = gltf.scene.children[1];
+         cup_full.material = cup_mat;
+
+
+         cup_half_liquid = gltf.scene.children[2];
+         cup_half_liquid.material = cup_liquid_mat;
+         cup_full_liquid = gltf.scene.children[3];
+         cup_full_liquid.material = cup_liquid_mat;
+
+         /* scene.add(cup_half);
+         scene.add(cup_half_liquid);
+         scene.add(cup_full);
+         scene.add(cup_full_liquid); */
+         assets.push(cup_half);
+         assets.push(cup_half_liquid);
+         assets.push(cup_full);
+         assets.push(cup_full_liquid);
+
+         cup_half.position.copy(default_pos)
+         cup_half_liquid.position.copy(default_pos)
+         cup_full.position.copy(default_pos)
+         cup_half_liquid.position.copy(default_pos)
+
+         /* module.exports.cup_half = cup_half;
+         module.exports.cup_half_liquid = cup_half_liquid
+         module.exports.cup_full = cup_half;
+         module.exports.cup_full_liquid = cup_half_liquid */
+
+         successCount++;
+     }
+ }, err => {
+     console.log(err)
+ })
+ loadCount++
+ loader.load('./assets/onion.glb', gltf => {
+     console.log("onion", gltf)
+
+     const onion_mat = new THREE.MeshStandardMaterial({
+         map: onion_body_color
+     });
+     const onion_pieces_mat = new THREE.MeshStandardMaterial({
+         map: onion_piece_base_color
+         /* color: 0xf9fab9 */
+     })
+     const onion_shell_mat = new THREE.MeshStandardMaterial({
+         map: onion_shell_base_color,
+         bumpMap: onion_shell_bump
+     })
+
+     onion_pieces = gltf.scene.children[0];
+     onion = gltf.scene.children[1];
+     onion_shell = gltf.scene.children[2];
+
+
+
+     onion.rotation.x = Math.PI
+
+     onion_pieces.material = onion_pieces_mat;
+     for (let child of onion_pieces.children) {
+         child.material = onion_pieces_mat
+     }
+     onion.material = onion_mat;
+     onion_shell.material = onion_shell_mat;
+
+     onion_pieces.position.copy(default_pos)
+     onion.position.copy(default_pos)
+     onion_shell.position.copy(default_pos)
+
+     onion_pieces.scale.set(.3, .3, .3)
+     onion.scale.set(.3, .3, .3)
+     onion_shell.scale.set(.3, .3, .3)
+
+     module.exports.onion_pieces = onion_pieces;
+     module.exports.onion = onion;
+     module.exports.onion_shell = onion_shell;
+
+     /* scene.add(onion_pieces);
+     scene.add(onion);
+     scene.add(onion_shell) */
+     assets.push(onion_pieces);
+     assets.push(onion);
+     assets.push(onion_shell)
+     successCount++;
+ }, err => {
+     console.log(err)
+ })
+ loadCount++
+ loader.load('assets/pan.glb', gltf => {
+     pan = gltf.scene.children[0];
+
+     /* const cast_iron_mat = new THREE.MeshToonMaterial({
+         color: 'darkgrey'
+     });
+     const handle_mat = new THREE.MeshToonMaterial({
+         color: 'lightblue'
+     }); */
+     const panMat = new THREE.MeshToonMaterial({
+         bumpScale: .03,
+         bumpMap: pan_bump,
+         map: pan_color,
+         gradientMap: threeTone
+
+     })
+
+     pan.children[0].material = panMat;
+     pan.children[1].material = panMat;
+
+     pan.position.copy(default_pos)
+     /* pan.position.set(0, 0, 0); */
+
+     /* module.exports.pan = pan; */
+
+     /* console.log(pan) */
+
+     assets.push(pan);
+     successCount++;
+ }, err => {
+     console.log(err)
+ })
+ loadCount++
+ loader.load('assets/pan_liquid.glb', gltf => {
+     pan_liquid = gltf.scene.children[0];
+
+     const pan_liquid_mat = new THREE.MeshStandardMaterial({
+         color: 0xffff99,
+         morphTargets: true
+
+     })
+
+     pan_liquid.material = pan_liquid_mat;
+
+     pan_liquid.position.set(0, 0, 0)
+     pan_liquid.position.copy(default_pos)
+     /* pan_liquid.parent = pan; */
+
+     /* module.exports.saw = saw; */
+
+     assets.push(pan_liquid);
+     successCount++;
+ }, err => {
+     console.log(err)
+ })
+ loadCount++
+ loader.load('assets/lobster_crackable.glb', gltf => {
+     console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+     console.log(gltf);
+
+     claw_cracked = gltf.scene.children[2];
+     claw_meat = gltf.scene.children[4];
+     lobster_cracked = gltf.scene.children[5];
+     lobster_meat = gltf.scene.children[3];
+
+     claw_cracked.material = cookedLobsterMat;
+     lobster_cracked.material = cookedLobsterMat;
+     for (child of lobster_cracked.children) {
+         child.material = cookedLobsterMat;
+     }
+
+     /* const panMat = new THREE.MeshToonMaterial({
+         bumpScale: 0,
+         bumpMap: pan_bump,
+         map: pan_color
+     }) */
+
+     /* putChildrenAtOrigin(claw_cracked); */
+
+     /* module.exports.pan = pan; */
+
+     /* console.log(pan) */
+
+     claw_cracked.position.copy(default_pos);
+     claw_meat.position.copy(default_pos);
+     lobster_cracked.position.copy(default_pos);
+     lobster_meat.position.copy(default_pos);
+
+
+     assets.push(claw_cracked);
+     assets.push(claw_meat);
+     assets.push(lobster_cracked);
+     assets.push(lobster_meat);
+     successCount++;
+ }, err => {
+     console.log(err)
+ })
+ loadCount++
+ loader.load('assets/saw.glb', gltf => {
+     saw = gltf.scene.children[0];
+
+     const sawMat = new THREE.MeshStandardMaterial({
+         map: saw_base_color,
+         metalness: 1,
+         roughnessMap: saw_roughness
+     })
+
+     saw.material = sawMat;
+
+     saw.position.set(0, 0, 0)
+     saw.position.copy(default_pos)
+
+     /* module.exports.saw = saw; */
+
+     assets.push(saw);
+     successCount++;
+ }, err => {
+     console.log(err)
+ })
+ loadCount++
+ loader.load('assets/yolk.glb', gltf => {
+     yolk = gltf.scene.children[0];
+
+     /* const yolkMat = new THREE.MeshStandardMaterial({
+         map: saw_base_color,
+         metalness: 1,
+         roughnessMap: saw_roughness
+     }) */
+
+     /* saw.material = sawMat; */
+     yolk.scale.set(.15, .15, .15)
+
+     yolk.position.set(0, 0, 0)
+     yolk.position.copy(default_pos)
+
+     /* module.exports.saw = saw; */
+
+     assets.push(yolk);
+     successCount++;
+ }, err => {
+     console.log(err)
+ })
+ loadCount++
+ loader.load('assets/spoon.glb', gltf => {
+
+     console.log(gltf.scene)
+
+     const spoon_mat = new THREE.MeshToonMaterial({
+         color: 'lightgrey'
+     });
+     const spoon_spice_mat = new THREE.MeshToonMaterial({
+         map: spoon_spice_base_color
+     });
+     const spoon_flake_mat = new THREE.MeshToonMaterial({
+         map: spoon_spice_base_color
+     });
+
+
+     spoon = gltf.scene.children[1];
+     spoon_spice = gltf.scene.children[0];
+     spoon_flakes = gltf.scene.children[0].children;
+
+     spoon.material = spoon_mat;
+     spoon_spice.material = spoon_spice_mat;
+     let o = new THREE.Object3D();
+     o.children = spoon_flakes;
+     spoon_flakes = o;
+     console.log(spoon_flakes)
+     for (var flake of spoon_flakes.children) {
+         flake.material = spoon_flake_mat;
+     }
+
+     spoon.position.copy(default_pos)
+     spoon.rotation.set(0, 0, 0)
+     spoon_spice.position.copy(default_pos)
+     console.log("FUCK THIS SHIT")
+     console.log(spoon_flakes);
+     spoon_flakes.position.copy(default_pos)
+     spoon_flakes.name = "spoon_flakes"
+
+     console.log(spoon)
+     models_loaded = true;
+
+     module.exports.spoon_flakes = spoon_flakes
+
+     assets.push(spoon)
+     assets.push(spoon_spice)
+     assets.push(spoon_flakes)
+
+
+
+     successCount++;
+
+
+     module.exports.fucking_load = setInterval(() => {
+         console.log("trying to load")
+         if (scene && successCount == loadCount) {
+             console.log("achieved loading " + successCount + " out of " + loadCount + " model")
+
+             models_loaded = true;
+
+             pan.position.clone(default_pos)
+
+             for (var obj of assets) {
+                 console.log(obj.type)
+
+                 obj.position.clone(default_pos)
+                 putChildrenAtOrigin(obj)
+                 if (obj.type == "Mesh" || true) {
+                     scene.add(obj)
+                 }
+
+                 module.exports[obj.name] = obj;
+             }
+
+             clearInterval(module.exports.fucking_load)
+         }
+
+     }, 1000)
+     /* module.exports.fucking_load = fucking_load */
+
+ }, err => {
+     console.log(err)
+ })
+
+
+ function putChildrenAtOrigin(object) {
+     for (child of object.children) {
+         child.position.set(0, 0, 0);
+     }
+ }
 },{"THREE":4,"three-gltf-loader":5}],4:[function(require,module,exports){
 // threejs.org/license
 (function (global, factory) {
