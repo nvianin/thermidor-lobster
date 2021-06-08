@@ -717,6 +717,16 @@ window.addEventListener('onload', () => {
 })
 
 function playSound(sound) {
+    let url = sound;
+    /* playSound('../assets/sounds/boil_Steam.mp3')
+    "https://github.com/nvianin/thermidor-lobster/blob/master/assets/sounds/boil_Steam.mp3?raw=true" */
+
+    url = url.substring(2);
+    url = "https://github.com/nvianin/thermidor-lobster/blob/master" + url + "?raw=true"
+
+    sound = url;
+
+
     if (stepPlayer.playsSound) {
         let audio = new Audio(sound)
         audio.play()
