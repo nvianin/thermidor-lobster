@@ -155,6 +155,11 @@ window.addEventListener('resize', function () {
     renderer.setSize(window.innerWidth, window.innerHeight)
     SAOPass.setSize(window.innerWidth, window.innerHeight);
     /* console.log(camera.position) */
+
+    const pixelRatio = renderer.getPixelRatio();
+
+    fxaapass.material.uniforms['resolution'].value.x = 1 / (window.innerWidth * pixelRatio)
+    fxaapass.material.uniforms['resolution'].value.y = 1 / (window.innerHeight * pixelRatio)
 })
 
 
