@@ -726,6 +726,8 @@ function playSound(sound) {
 
     sound = url;
 
+    console.log(url)
+
 
     if (stepPlayer.playsSound) {
         let audio = new Audio(sound)
